@@ -146,46 +146,61 @@
     // ポップアップに表示する内容
     // ※個人情報は出さない設定
     // ==============================
-    function createPopupContent(properties) {
-      const houseId = safeValue(properties['house_id']);
-      const status = safeValue(properties[STATUS_FIELD]);
+// ==============================
+// ポップアップに表示する内容
+// ==============================
+function createPopupContent(properties) {
+  const houseId = safeValue(properties['house_id']);
 
-      const rows = [
-        ['house_id', properties['house_id']],
-        ['状態', properties[STATUS_FIELD]],
-        ['地区番号', properties['district']],
-        ['所属地区', properties['sukari_house_status_所属する地区']],
-        ['須賀利区への加入', properties['sukari_house_status_須賀利区への加入']]
-      ];
+  // 1行追加するための関数
+  // alwaysDisplay が true のものは、空欄でも常に表示
+  function addRow(label, value, alwaysDisplay = false) {
+    const displayValue = safeValue(value);
 
-      let html = '';
-
-      html += '<div class="popup-title">';
-      html += '住宅情報';
-      if (houseId) {
-        html += '：' + escapeHtml(houseId);
-      }
-      html += '</div>';
-
-      html += '<table class="popup-table">';
-
-      rows.forEach(function(row) {
-        const label = row[0];
-        const value = row[1];
-
-        if (value !== null && value !== undefined && value !== '') {
-          html += '<tr>';
-          html += '<th>' + escapeHtml(label) + '</th>';
-          html += '<td>' + escapeHtml(value) + '</td>';
-          html += '</tr>';
-        }
-      });
-
-      html += '</table>';
-
-      return html;
+    if (!alwaysDisplay && displayValue === '') {
+      return '';
     }
 
+    return (
+      '<tr>' +
+        '<th>' + escapeHtml(label) + '</th>' +
+        '<td>' + escapeHtml(displayValue) + '</td>' +
+      '</tr>'
+    );
+  }
+
+  let html = '';
+
+  html += '<div class="popup-title">';
+  html += '住宅情報';
+  if (houseId) {
+    html += '：' + escapeHtml(houseId);
+  }
+  html += '</div>';
+
+  html += '<table class="popup-table">';
+
+  // 常に表示する基本情報
+  html += addRow('house_id', properties['house_id'], true);
+  html += addRow('状態', properties[STATUS_FIELD], true);
+  html += addRow('番地', properties['sukari_house_status_地番'], true);
+  html += addRow('所有者氏名', properties['sukari_house_status_所有者　氏名'], true);
+  html += addRow('所有者連絡先', properties['sukari_house_status_所有者　連絡先'], true);
+
+  // 入居者名①〜④は、記入がある場合だけ表示
+  html += addRow('入居者名①', properties['sukari_house_status_入居者名①']);
+  html += addRow('入居者名②', properties['sukari_house_status_入居者名②']);
+  html += addRow('入居者名③', properties['sukari_house_status_入居者名③']);
+  html += addRow('入居者名④', properties['sukari_house_status_入居者名④']);
+
+  // 必要そうな補足情報
+  html += addRow('所属地区', properties['sukari_house_status_所属する地区']);
+  html += addRow('須賀利区への加入', properties['sukari_house_status_須賀利区への加入']);
+
+  html += '</table>';
+
+  return html;
+}
     // 後でマウスアウト時に元の色へ戻すための変数
     let housesLayer;
 
