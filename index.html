@@ -3,30 +3,195 @@
 <head>
   <meta charset="utf-8">
   <title>Sugari Houses Map</title>
+
+  <!-- LeafletのCSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
+
   <style>
     html, body, #map {
       height: 100%;
       margin: 0;
       padding: 0;
     }
+
     #map {
       width: 100%;
     }
+
+    /* 凡例のデザイン */
+    .legend {
+      background: white;
+      padding: 10px 12px;
+      line-height: 22px;
+      color: #333;
+      border-radius: 6px;
+      box-shadow: 0 0 8px rgba(0,0,0,0.3);
+      font-size: 13px;
+      max-height: 70vh;
+      overflow-y: auto;
+    }
+
+    .legend-title {
+      font-weight: bold;
+      margin-bottom: 6px;
+      font-size: 14px;
+    }
+
+    .legend-color {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      margin-right: 6px;
+      border: 1px solid #555;
+      vertical-align: middle;
+    }
+
+    /* ポップアップの見た目 */
+    .popup-title {
+      font-weight: bold;
+      font-size: 15px;
+      margin-bottom: 6px;
+    }
+
+    .popup-table {
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .popup-table th {
+      text-align: left;
+      padding: 3px 8px 3px 0;
+      white-space: nowrap;
+      color: #333;
+    }
+
+    .popup-table td {
+      padding: 3px 0;
+      color: #111;
+    }
   </style>
 </head>
+
 <body>
   <div id="map"></div>
 
+  <!-- Leaflet本体 -->
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
   <script>
+    // ==============================
+    // 地図の初期表示
+    // ==============================
     const map = L.map('map').setView([34.086, 136.232], 16);
 
+    // ==============================
+    // 背景地図：OpenStreetMap
+    // ==============================
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 20,
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
+    // ==============================
+    // GeoJSON内の「状態」列名
+    // ==============================
+    const STATUS_FIELD = 'sukari_house_status_状態';
+
+    // ==============================
+    // 状態ごとの色
+    // QGISの色分けに近い色を指定
+    // ==============================
+    const statusColors = {
+      '現在居住': '#FFD700',
+      '完全空き家': '#FFFF00',
+      '空き家で施設入居及び年に数回居住': '#ADFF2F',
+      '倉庫': '#00FF00',
+      '飲食店': '#FF00FF',
+      '商店': '#A020F0',
+      '加工場': '#00FFFF',
+      '行政関係': '#4169E1',
+      '現在居住(別荘)': '#D2B48C',
+      '神社・お寺': '#9370DB',
+      '撤去済み': '#FFFFFF',
+      '管理不完全空き家': '#808080',
+      '特定空き家': '#000000',
+      '不明': '#DDDDDD'
+    };
+
+    // 状態名から色を取得する関数
+    function getColor(status) {
+      const key = String(status || '').trim();
+      return statusColors[key] || '#3388FF';
+    }
+
+    // nullやundefinedを空白にする
+    function safeValue(value) {
+      if (value === null || value === undefined || value === '') {
+        return '';
+      }
+      return String(value);
+    }
+
+    // HTMLとして安全に表示するための処理
+    function escapeHtml(value) {
+      return safeValue(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    // ==============================
+    // ポップアップに表示する内容
+    // ※個人情報は出さない設定
+    // ==============================
+    function createPopupContent(properties) {
+      const houseId = safeValue(properties['house_id']);
+      const status = safeValue(properties[STATUS_FIELD]);
+
+      const rows = [
+        ['house_id', properties['house_id']],
+        ['状態', properties[STATUS_FIELD]],
+        ['地区番号', properties['district']],
+        ['所属地区', properties['sukari_house_status_所属する地区']],
+        ['須賀利区への加入', properties['sukari_house_status_須賀利区への加入']]
+      ];
+
+      let html = '';
+
+      html += '<div class="popup-title">';
+      html += '住宅情報';
+      if (houseId) {
+        html += '：' + escapeHtml(houseId);
+      }
+      html += '</div>';
+
+      html += '<table class="popup-table">';
+
+      rows.forEach(function(row) {
+        const label = row[0];
+        const value = row[1];
+
+        if (value !== null && value !== undefined && value !== '') {
+          html += '<tr>';
+          html += '<th>' + escapeHtml(label) + '</th>';
+          html += '<td>' + escapeHtml(value) + '</td>';
+          html += '</tr>';
+        }
+      });
+
+      html += '</table>';
+
+      return html;
+    }
+
+    // 後でマウスアウト時に元の色へ戻すための変数
+    let housesLayer;
+
+    // ==============================
+    // houses.geojsonを読み込む
+    // ==============================
     fetch('./houses.geojson')
       .then(response => {
         if (!response.ok) {
@@ -35,22 +200,102 @@
         return response.json();
       })
       .then(data => {
-        const layer = L.geoJSON(data, {
+
+        // ==============================
+        // GeoJSONを地図へ追加
+        // ==============================
+        housesLayer = L.geoJSON(data, {
+
+          // 建物ポリゴンの色設定
+          style: function(feature) {
+            const properties = feature.properties || {};
+            const status = properties[STATUS_FIELD];
+            const color = getColor(status);
+
+            return {
+              color: color,
+              fillColor: color,
+              weight: 2,
+              fillOpacity: 0.65
+            };
+          },
+
+          // 建物ごとのクリック・マウス操作
           onEachFeature: function(feature, layer) {
-            let popup = '';
-            for (let key in feature.properties) {
-              popup += '<b>' + key + '</b>: ' + feature.properties[key] + '<br>';
-            }
-            layer.bindPopup(popup);
+            const properties = feature.properties || {};
+
+            // ポップアップ
+            layer.bindPopup(createPopupContent(properties));
+
+            // マウスを乗せた時に少し強調
+            layer.on('mouseover', function(e) {
+              e.target.setStyle({
+                weight: 4,
+                fillOpacity: 0.85
+              });
+
+              e.target.bringToFront();
+            });
+
+            // マウスを外した時に元に戻す
+            layer.on('mouseout', function(e) {
+              housesLayer.resetStyle(e.target);
+            });
           }
+
         }).addTo(map);
 
-        map.fitBounds(layer.getBounds());
+        // 全体が見えるように自動調整
+        map.fitBounds(housesLayer.getBounds());
       })
       .catch(error => {
-        document.body.innerHTML = '<p style="padding:20px;color:red;">エラー: ' + error.message + '</p>';
+        document.body.innerHTML =
+          '<p style="padding:20px;color:red;">エラー: ' +
+          error.message +
+          '</p>';
+
         console.error(error);
       });
+
+    // ==============================
+    // 凡例を右上に表示
+    // ==============================
+    const legend = L.control({ position: 'topright' });
+
+    legend.onAdd = function(map) {
+      const div = L.DomUtil.create('div', 'legend');
+
+      div.innerHTML += '<div class="legend-title">状態</div>';
+
+      const items = [
+        ['現在居住', '#FFD700'],
+        ['完全空き家', '#FFFF00'],
+        ['空き家で施設入居及び年に数回居住', '#ADFF2F'],
+        ['倉庫', '#00FF00'],
+        ['飲食店', '#FF00FF'],
+        ['商店', '#A020F0'],
+        ['加工場', '#00FFFF'],
+        ['行政関係', '#4169E1'],
+        ['現在居住(別荘)', '#D2B48C'],
+        ['神社・お寺', '#9370DB'],
+        ['撤去済み', '#FFFFFF'],
+        ['管理不完全空き家', '#808080'],
+        ['特定空き家', '#000000'],
+        ['不明', '#DDDDDD']
+      ];
+
+      items.forEach(function(item) {
+        div.innerHTML +=
+          '<div>' +
+          '<span class="legend-color" style="background:' + item[1] + '"></span>' +
+          item[0] +
+          '</div>';
+      });
+
+      return div;
+    };
+
+    legend.addTo(map);
   </script>
 </body>
 </html>
