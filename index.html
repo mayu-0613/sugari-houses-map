@@ -1,1 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Sugari Houses Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
+  <style>
+    html, body, #map {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+    #map {
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
 
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map').setView([34.086, 136.232], 16);
+
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 20,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    fetch('./houses.geojson')
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('GeoJSONを読み込めませんでした');
+        }
+        return response.json();
+      })
+      .then(data => {
+        const layer = L.geoJSON(data, {
+          onEachFeature: function(feature, layer) {
+            let popup = '';
+            for (let key in feature.properties) {
+              popup += '<b>' + key + '</b>: ' + feature.properties[key] + '<br>';
+            }
+            layer.bindPopup(popup);
+          }
+        }).addTo(map);
+
+        map.fitBounds(layer.getBounds());
+      })
+      .catch(error => {
+        document.body.innerHTML = '<p style="padding:20px;color:red;">エラー: ' + error.message + '</p>';
+        console.error(error);
+      });
+  </script>
+</body>
+</html>
