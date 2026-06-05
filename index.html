@@ -69,14 +69,22 @@
       padding: 3px 0;
       color: #111;
     }
+/* ポップアップ全体の幅を調整 */
+    .leaflet-popup-content {
+      width: 280px !important;
+      max-width: 280px !important;
+    }
+
+    /* ポップアップ内の画像サイズ */
     .popup-image {
-  　　width: 240px;
-  　　max-height: 180px;
-  　　object-fit: cover;
-  　　border-radius: 6px;
-  　　margin-top: 8px;
-  　　border: 1px solid #ccc;
-  　　display: block;
+      width: 100% !important;
+      max-width: 260px !important;
+      max-height: 180px !important;
+      object-fit: contain;
+      border-radius: 6px;
+      margin-top: 8px;
+      border: 1px solid #ccc;
+      display: block;
     }
   </style>
 </head>
@@ -317,7 +325,9 @@ function createPopupContent(properties) {
             const properties = feature.properties || {};
 
             // ポップアップ
-            layer.bindPopup(createPopupContent(properties));
+            layer.bindPopup(createPopupContent(properties), {
+              maxWidth: 300
+            });
 
             // マウスを乗せた時に少し強調
             layer.on('mouseover', function(e) {
