@@ -69,6 +69,15 @@
       padding: 3px 0;
       color: #111;
     }
+    .popup-image {
+  　　width: 240px;
+  　　max-height: 180px;
+  　　object-fit: cover;
+  　　border-radius: 6px;
+  　　margin-top: 8px;
+  　　border: 1px solid #ccc;
+  　　display: block;
+    }
   </style>
 </head>
 
@@ -149,6 +158,9 @@
 // ==============================
 // ポップアップに表示する内容
 // ==============================
+// ==============================
+// ポップアップに表示する内容
+// ==============================
 function createPopupContent(properties) {
   const houseId = safeValue(properties['house_id']);
 
@@ -169,6 +181,63 @@ function createPopupContent(properties) {
     );
   }
 
+  // 複数候補の列名から、最初に値が入っているものを取得
+  function getFirstValue(fieldNames) {
+    for (const fieldName of fieldNames) {
+      const value = safeValue(properties[fieldName]);
+      if (value !== '') {
+        return value;
+      }
+    }
+    return '';
+  }
+
+  // GoogleドライブのURLを画像表示用URLに変換
+  function convertGoogleDriveImageUrl(url) {
+    const imageUrl = safeValue(url);
+
+    if (imageUrl === '') {
+      return '';
+    }
+
+    // Google Driveの共有URLの場合
+    if (imageUrl.includes('drive.google.com')) {
+      let fileId = '';
+
+      // 形式1:
+      // https://drive.google.com/file/d/FILE_ID/view
+      const matchFile = imageUrl.match(/\/file\/d\/([^/]+)/);
+      if (matchFile && matchFile[1]) {
+        fileId = matchFile[1];
+      }
+
+      // 形式2:
+      // https://drive.google.com/open?id=FILE_ID
+      // https://drive.google.com/uc?id=FILE_ID
+      const matchId = imageUrl.match(/[?&]id=([^&]+)/);
+      if (!fileId && matchId && matchId[1]) {
+        fileId = matchId[1];
+      }
+
+      // ファイルIDが取れたら、画像表示用URLに変換
+      if (fileId) {
+        return 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w800';
+      }
+    }
+
+    // GitHub内の画像パスや通常URLの場合はそのまま使う
+    return imageUrl;
+  }
+
+  // image_path1 の取得
+  // GeoJSON側では prefix が付いている可能性があるため複数候補を見ます
+  const imagePath1 = getFirstValue([
+    'sukari_house_status_image_path1',
+    'image_path1'
+  ]);
+
+  const displayImageUrl = convertGoogleDriveImageUrl(imagePath1);
+
   let html = '';
 
   html += '<div class="popup-title">';
@@ -180,7 +249,7 @@ function createPopupContent(properties) {
 
   html += '<table class="popup-table">';
 
-  // 常に表示する基本情報
+  // 常に表示する情報
   html += addRow('house_id', properties['house_id'], true);
   html += addRow('状態', properties[STATUS_FIELD], true);
   html += addRow('番地', properties['sukari_house_status_地番'], true);
@@ -193,11 +262,19 @@ function createPopupContent(properties) {
   html += addRow('入居者名③', properties['sukari_house_status_入居者名③']);
   html += addRow('入居者名④', properties['sukari_house_status_入居者名④']);
 
-  // 必要そうな補足情報
+  // 補足情報
   html += addRow('所属地区', properties['sukari_house_status_所属する地区']);
   html += addRow('須賀利区への加入', properties['sukari_house_status_須賀利区への加入']);
+  html += addRow('維持管理状況', properties['sukari_house_status_維持管理状況']);
+  html += addRow('今後の建物維持管理について', properties['sukari_house_status_今後の建物維持管理について']);
+  html += addRow('メモ', properties['sukari_house_status_メモ']);
 
   html += '</table>';
+
+  // 画像がある場合だけ表示
+  if (displayImageUrl !== '') {
+    html += '<img class="popup-image" src="' + escapeHtml(displayImageUrl) + '" alt="住宅画像">';
+  }
 
   return html;
 }
