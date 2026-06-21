@@ -86,6 +86,41 @@
       border: 1px solid #ccc;
       display: block;
     }
+    /* house_id検索ボックス */
+.search-box {
+  background: white;
+  padding: 10px;
+  border-radius: 6px;
+  box-shadow: 0 0 8px rgba(0,0,0,0.3);
+  font-size: 13px;
+}
+
+.search-box input {
+  width: 160px;
+  padding: 6px;
+  border: 1px solid #999;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.search-box button {
+  padding: 6px 8px;
+  margin-left: 4px;
+  border: 1px solid #777;
+  border-radius: 4px;
+  background: #f5f5f5;
+  cursor: pointer;
+}
+
+.search-box button:hover {
+  background: #e0e0e0;
+}
+
+.search-message {
+  margin-top: 5px;
+  color: red;
+  font-size: 12px;
+}
   </style>
 </head>
 
@@ -288,7 +323,7 @@ function createPopupContent(properties) {
 }
     // 後でマウスアウト時に元の色へ戻すための変数
     let housesLayer;
-
+    const houseIdIndex = {};
     // ==============================
     // houses.geojsonを読み込む
     // ==============================
@@ -321,29 +356,36 @@ function createPopupContent(properties) {
           },
 
           // 建物ごとのクリック・マウス操作
-          onEachFeature: function(feature, layer) {
-            const properties = feature.properties || {};
+         onEachFeature: function(feature, layer) {
+  const properties = feature.properties || {};
 
-            // ポップアップ
-            layer.bindPopup(createPopupContent(properties), {
-              maxWidth: 300
-            });
+  // ポップアップ
+  layer.bindPopup(createPopupContent(properties), {
+    maxWidth: 300
+  });
 
-            // マウスを乗せた時に少し強調
-            layer.on('mouseover', function(e) {
-              e.target.setStyle({
-                weight: 4,
-                fillOpacity: 0.85
-              });
+  // house_idで検索できるように登録
+  const houseId = safeValue(properties['house_id']).trim();
 
-              e.target.bringToFront();
-            });
+  if (houseId !== '') {
+    houseIdIndex[houseId] = layer;
+  }
 
-            // マウスを外した時に元に戻す
-            layer.on('mouseout', function(e) {
-              housesLayer.resetStyle(e.target);
-            });
-          }
+  // マウスを乗せた時に少し強調
+  layer.on('mouseover', function(e) {
+    e.target.setStyle({
+      weight: 4,
+      fillOpacity: 0.85
+    });
+
+    e.target.bringToFront();
+  });
+
+  // マウスを外した時に元に戻す
+  layer.on('mouseout', function(e) {
+    housesLayer.resetStyle(e.target);
+  });
+}
 
         }).addTo(map);
 
@@ -398,6 +440,90 @@ function createPopupContent(properties) {
     };
 
     legend.addTo(map);
+
+    // ==============================
+// house_id検索ボックス
+// ==============================
+const searchControl = L.control({ position: 'topleft' });
+
+searchControl.onAdd = function(map) {
+  const div = L.DomUtil.create('div', 'search-box');
+
+  div.innerHTML =
+    '<div><b>house_id検索</b></div>' +
+    '<input id="houseSearchInput" type="text" placeholder="例：2-080-296">' +
+    '<button id="houseSearchButton">検索</button>' +
+    '<div id="houseSearchMessage" class="search-message"></div>';
+
+  // 検索ボックス操作時に地図が動かないようにする
+  L.DomEvent.disableClickPropagation(div);
+  L.DomEvent.disableScrollPropagation(div);
+
+  return div;
+};
+
+searchControl.addTo(map);
+
+// 検索実行
+function searchHouseId() {
+  const input = document.getElementById('houseSearchInput');
+  const message = document.getElementById('houseSearchMessage');
+
+  const keyword = input.value.trim();
+
+  message.textContent = '';
+
+  if (keyword === '') {
+    message.textContent = 'house_idを入力してください';
+    return;
+  }
+
+  const targetLayer = houseIdIndex[keyword];
+
+  if (!targetLayer) {
+    message.textContent = '見つかりませんでした';
+    return;
+  }
+
+  // 該当ポリゴンへ移動
+  if (targetLayer.getBounds) {
+    map.fitBounds(targetLayer.getBounds(), {
+      maxZoom: 20,
+      padding: [40, 40]
+    });
+  }
+
+  // ポップアップを開く
+  targetLayer.openPopup();
+
+  // 一時的に強調表示
+  targetLayer.setStyle({
+    weight: 5,
+    fillOpacity: 0.95
+  });
+
+  targetLayer.bringToFront();
+
+  // 2秒後に元の色へ戻す
+  setTimeout(function() {
+    housesLayer.resetStyle(targetLayer);
+  }, 2000);
+}
+
+// ボタンで検索
+document.addEventListener('click', function(e) {
+  if (e.target && e.target.id === 'houseSearchButton') {
+    searchHouseId();
+  }
+});
+
+// Enterキーでも検索
+document.addEventListener('keydown', function(e) {
+  if (e.target && e.target.id === 'houseSearchInput' && e.key === 'Enter') {
+    searchHouseId();
+  }
+});
+    
   </script>
 </body>
 </html>
